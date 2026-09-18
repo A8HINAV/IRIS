@@ -1,0 +1,6 @@
+Before running the src as clone. Make sure to download the following Libraries : 
+pywebview
+keyboard
+aiohttp
+beautifulsoup4
+Pillow
