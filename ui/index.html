@@ -1,0 +1,369 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>IRIS HUD</title>
+  <style>
+    :root {
+      --cyan: #00f0ff;
+      --purple: #aa00ff;
+      --panel-bg: rgba(20, 30, 40, 0.95);
+      --border-color: rgba(0, 240, 255, 0.3);
+    }
+
+    * { box-sizing: border-box; }
+
+    html, body {
+      background-color: transparent !important; 
+      margin: 0; overflow: hidden;
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      color: var(--cyan);
+      display: flex; flex-direction: column; height: 100vh; padding: 16px; user-select: none;
+    }
+
+    /* --- BOOT SCREEN OVERLAY --- */
+    #boot-screen {
+      position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+      background: radial-gradient(circle at center, rgba(13, 17, 23, 0.95) 0%, rgba(5, 7, 10, 0.98) 100%);
+      z-index: 5000; display: flex; flex-direction: column; justify-content: center; align-items: center;
+      -webkit-app-region: drag; 
+      text-align: center; border-radius: 8px; border: 1px solid rgba(0, 240, 255, 0.15);
+      box-shadow: inset 0 0 100px rgba(0, 0, 0, 0.8);
+    }
+    
+    #particles { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: -1; pointer-events: none; opacity: 0.6; }
+    
+    .boot-logo { font-size: 48px; font-weight: 900; letter-spacing: 14px; background: linear-gradient(90deg, var(--cyan), var(--purple)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; margin-bottom: 35px; filter: drop-shadow(0 0 15px rgba(0,240,255,0.3)); }
+    .boot-box { background: rgba(0, 0, 0, 0.4); border: 1px solid rgba(0, 240, 255, 0.2); padding: 25px 35px; border-radius: 8px; max-width: 450px; line-height: 1.7; font-size: 14px; color: #a9b5c7; box-shadow: 0 10px 30px rgba(0,0,0,0.5); backdrop-filter: blur(10px); }
+    .hk-tag { color: var(--cyan); font-weight: bold; font-family: 'Consolas', monospace; font-size: 15px; padding: 3px 8px; background: rgba(0, 240, 255, 0.1); border-radius: 4px; border: 1px solid rgba(0, 240, 255, 0.3); }
+
+    .boot-footer { position: absolute; bottom: 25px; max-width: 650px; font-size: 11px; color: #a9b5c7; opacity: 0.75; text-align: center; line-height: 1.6; }
+    .heart-text { margin-top: 10px; font-weight: bold; color: var(--cyan); letter-spacing: 1px; }
+
+    /* --- HUD ELEMENTS --- */
+    .hud-grid, .panel, p, h2, #image-gallery, #image-gallery img, #info-modal, #image-modal { -webkit-app-region: no-drag !important; }
+    .header-bar { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; -webkit-app-region: drag; background: var(--panel-bg); padding: 8px 12px; border-radius: 8px; border: 1px solid var(--border-color); box-shadow: 0 4px 15px rgba(0, 0, 0, 0.5); }
+    .spinner { width: 18px; height: 18px; border: 2px solid rgba(0, 240, 255, 0.2); border-top-color: var(--cyan); border-radius: 50%; animation: spin 1s linear infinite; display: none; }
+    @keyframes spin { 100% { transform: rotate(360deg); } }
+    .title-tag { font-size: 16px; font-weight: 900; letter-spacing: 2px; background: linear-gradient(90deg, var(--cyan), var(--purple)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; text-shadow: 0 0 10px rgba(0, 240, 255, 0.2); cursor: pointer; transition: opacity 0.2s; }
+    #command-input { -webkit-app-region: no-drag; flex-grow: 1; background: transparent; border: none; color: #fff; font-size: 16px; padding: 8px; outline: none; }
+    #command-input::placeholder { color: rgba(255, 255, 255, 0.4); }
+    .window-controls { -webkit-app-region: no-drag; display: flex; gap: 8px; }
+    .ctrl-btn { color: var(--cyan); width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; cursor: pointer; font-weight: bold; transition: all 0.15s ease; border-radius: 4px; }
+    .ctrl-btn:hover { background: rgba(0, 240, 255, 0.2); }
+
+    .hud-grid { display: none; grid-template-columns: 1fr 1fr; gap: 16px; flex-grow: 1; height: calc(100vh - 80px); }
+    .panel { background: var(--panel-bg); border: 1px solid var(--border-color); border-radius: 8px; box-shadow: 0 8px 25px rgba(0, 0, 0, 0.5); padding: 20px; overflow-y: auto; display: flex; flex-direction: column; }
+    .badge { align-self: flex-start; font-size: 11px; letter-spacing: 1.5px; text-transform: uppercase; padding: 4px 10px; border: 1px solid var(--cyan); border-radius: 4px; margin-bottom: 12px; color: #fff; background: rgba(0, 240, 255, 0.1); }
+    h2 { margin: 0 0 12px 0; font-size: 24px; color: #fff; user-select: text; cursor: text; }
+    p { line-height: 1.6; font-size: 15px; color: #d0f4ff; margin: 0; user-select: text; cursor: text; white-space: pre-wrap; }
+    #image-gallery { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; margin-top: 5px; }
+    #image-gallery img { width: 100%; height: 130px; object-fit: cover; border-radius: 6px; border: 1px solid var(--border-color); pointer-events: auto !important; cursor: zoom-in !important; transition: transform 0.2s; }
+    #image-gallery img:hover { transform: scale(1.03); border-color: #fff; }
+    #map-container { display: none; flex-direction: column; gap: 12px; margin-top: 15px; }
+    iframe { width: 100%; height: 160px; border: 1px solid var(--border-color); border-radius: 6px; }
+    
+    #image-modal, #info-modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.85); backdrop-filter: blur(8px); z-index: 1000; justify-content: center; align-items: center; }
+    #modal-img { max-width: 90%; max-height: 90%; border-radius: 8px; box-shadow: 0 0 30px rgba(0, 240, 255, 0.3); border: 1px solid var(--cyan); cursor: default; }
+
+    /* --- REDESIGNED SETTINGS MODAL (SIDEBAR LAYOUT) --- */
+    #info-modal { z-index: 2000; }
+    .info-card { background: var(--panel-bg); border: 1px solid var(--border-color); border-radius: 8px; width: 700px; height: 420px; box-shadow: 0 0 30px rgba(0, 240, 255, 0.2); cursor: default; display: flex; overflow: hidden; }
+    
+    .modal-sidebar { width: 160px; background: rgba(0, 0, 0, 0.4); border-right: 1px solid rgba(0, 240, 255, 0.2); display: flex; flex-direction: column; padding: 25px 0; }
+    .tab-btn { padding: 14px 25px; color: #a9b5c7; font-size: 13px; font-weight: bold; letter-spacing: 1.5px; cursor: pointer; border-left: 3px solid transparent; transition: all 0.2s; text-transform: uppercase; }
+    .tab-btn:hover { background: rgba(0, 240, 255, 0.1); color: #fff; }
+    .tab-btn.active { border-left-color: var(--cyan); background: rgba(0, 240, 255, 0.15); color: var(--cyan); }
+    
+    .modal-main { flex-grow: 1; display: flex; flex-direction: column; padding: 25px; }
+    .info-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; border-bottom: 1px solid var(--border-color); padding-bottom: 12px; }
+    .info-title { font-weight: 800; letter-spacing: 1.5px; font-size: 14px; color: #fff; text-transform: uppercase; }
+    .info-close { cursor: pointer; color: var(--cyan); font-weight: bold; font-size: 16px; }
+    
+    .tab-content { display: none; height: 100%; animation: fadeIn 0.3s ease; color: #c9f4ff; font-size: 13px; line-height: 1.6; }
+    .tab-content.active-tab { display: block; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+
+    /* Help Tab specific */
+    .query-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 15px; margin-bottom: 20px; }
+    .query-col { background: rgba(0,0,0,0.3); padding: 12px; border-radius: 4px; border: 1px solid rgba(255,255,255,0.1); }
+    .query-col.bad { border-color: rgba(255, 70, 70, 0.4); }
+    .query-col.good { border-color: rgba(0, 240, 255, 0.4); }
+    .query-tag { font-size: 10px; text-transform: uppercase; font-weight: bold; display: block; margin-bottom: 8px; }
+    .query-col.bad .query-tag { color: #ff7070; }
+    .query-col.good .query-tag { color: var(--cyan); }
+    .query-col code { display: block; font-size: 12px; margin-bottom: 4px; color: #fff; }
+
+    /* Feedback Tab specific */
+    #feedback-input { width: 100%; height: 140px; background: rgba(0,0,0,0.5); border: 1px solid rgba(0, 240, 255, 0.3); border-radius: 4px; color: #fff; padding: 12px; font-family: inherit; font-size: 13px; resize: none; outline: none; margin-top: 10px; margin-bottom: 15px; }
+    #feedback-input:focus { border-color: var(--cyan); }
+    #feedback-submit { background: rgba(0, 240, 255, 0.1); border: 1px solid var(--cyan); color: var(--cyan); padding: 8px 16px; border-radius: 4px; cursor: pointer; font-weight: bold; font-size: 12px; letter-spacing: 1px; transition: all 0.2s; }
+    #feedback-submit:hover { background: var(--cyan); color: #000; }
+
+    /* About Tab specific */
+    .about-line { margin-bottom: 12px; font-size: 14px; }
+    .about-label { font-weight: bold; color: #fff; display: inline-block; width: 85px; }
+    .about-val { color: var(--cyan); }
+    .contact-block { margin-top: 25px; border-top: 1px solid rgba(0, 240, 255, 0.2); padding-top: 20px; }
+  </style>
+</head>
+<body>
+
+  <!-- THE REDESIGNED BOOT SCREEN -->
+  <div id="boot-screen">
+    <canvas id="particles"></canvas>
+    <div class="boot-logo">IRIS</div>
+    <div class="boot-box">
+      Application is running in Background.<br><br>
+      Press <span class="hk-tag">CTRL + SPACE</span> to minimize this window and enter standby mode.<br><br>
+      Whenever required, press the hotkey again to instantly deploy the HUD from anywhere on your system.
+    </div>
+    
+    <div class="boot-footer">
+      IRIS operates with a near-zero CPU footprint compared to heavy web browsers. It is not designed as a browser alternative, but as a high-efficiency telemetry tool for rapid query resolution without disrupting your workflow.<br>
+      <div class="heart-text">Built with ♥ in INDIA</div>
+    </div>
+  </div>
+
+  <div id="image-modal" onclick="this.style.display='none'"><img id="modal-img" src="" onclick="event.stopPropagation()" /></div>
+
+  <!-- REDESIGNED SETTINGS MODAL -->
+  <div id="info-modal" onclick="toggleInfoModal()">
+    <div class="info-card" onclick="event.stopPropagation()">
+      
+      <!-- Sidebar -->
+      <div class="modal-sidebar">
+        <div class="tab-btn active" id="btn-help" onclick="switchTab('help')">Help</div>
+        <div class="tab-btn" id="btn-feedback" onclick="switchTab('feedback')">Feedback</div>
+        <div class="tab-btn" id="btn-about" onclick="switchTab('about')">About</div>
+      </div>
+
+      <!-- Main Content Area -->
+      <div class="modal-main">
+        <div class="info-header">
+          <span class="info-title" id="modal-title">HELP</span>
+          <span class="info-close" onclick="toggleInfoModal()">✕</span>
+        </div>
+        
+        <!-- Tab 1: Help -->
+        <div id="tab-help" class="tab-content active-tab">
+          <p><strong>Direct Keywords Beat Conversational Queries:</strong> For maximum speed, feed raw entities instead of full sentences.</p>
+          <div class="query-grid">
+            <div class="query-col bad">
+              <span class="query-tag">Inefficient</span>
+              <code>"who is Julius Caesar?"</code>
+            </div>
+            <div class="query-col good">
+              <span class="query-tag">Optimized</span>
+              <code>"Julius Caesar"</code>
+            </div>
+          </div>
+          <p style="margin-top:15px; opacity: 0.9;"><strong>Fast Syntax Operators:</strong><br><br>
+          • <strong>Math:</strong> <code>65 * 87</code>, <code>625 % 5</code> (0ms local return)<br>
+          • <strong>Double-Click Title Bar:</strong> Toggles HUD Drag Lock.</p>
+        </div>
+
+        <!-- Tab 2: Feedback -->
+        <div id="tab-feedback" class="tab-content">
+          <p>Encountered a bug or have a feature request? Transmit it directly to the Developer.</p>
+          <textarea id="feedback-input" placeholder="Describe the issue or feature..."></textarea>
+          <div style="display: flex; justify-content: space-between; align-items: center;">
+            <span id="feedback-status" style="font-size: 12px; font-weight: bold;"></span>
+            <button id="feedback-submit" onclick="transmitFeedback()">TRANSMIT</button>
+          </div>
+        </div>
+
+        <!-- Tab 3: About -->
+        <div id="tab-about" class="tab-content">
+          <div class="about-line"><span class="about-label">Repository:</span> <span class="about-val">Open Sourced at GitHub <span style="opacity:0.5;"> https://github.com/A8HINAV/IRIS</span></span></div>
+          <div class="about-line"><span class="about-label">Version:</span> <span class="about-val">v1.0.0</span></div>
+          <div class="about-line"><span class="about-label">Developer:</span> <span class="about-val" style="color: #fff;">Abhinav Tiwari</span></div>
+          
+          <div class="contact-block">
+            <p style="color: var(--cyan); font-weight: bold; margin-top: 0; margin-bottom: 12px; text-transform: uppercase;">Feel free to Reach out:</p>
+            <div class="about-line"><span class="about-label">Email:</span> <span class="about-val">abhinav.xnor@gmail.com</span></div>
+            <div class="about-line"><span class="about-label">Discord:</span> <span class="about-val">@a8hinav</span></div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <div class="header-bar">
+    <div class="spinner" id="loading-spinner"></div>
+    <span class="title-tag" title="Double-Click to Toggle Drag Lock">IRIS</span>
+    <input type="text" id="command-input" placeholder="Type your Query" autofocus autocomplete="off" />
+    <div class="window-controls">
+      <div class="ctrl-btn" title="Settings & Info" onclick="toggleInfoModal()">?</div>
+      <div class="ctrl-btn" title="Close HUD" onclick="window.pywebview.api.hide_window()">✕</div>
+    </div>
+  </div>
+
+  <div class="hud-grid" id="main-grid">
+    <div class="panel">
+      <span class="badge" id="category-badge"></span>
+      <h2 id="subject-title"></h2>
+      <p id="info-content"></p>
+    </div>
+    <div class="panel">
+      <span class="badge">OTHERS</span>
+      <div id="image-gallery"></div>
+      <div id="map-container"><iframe id="macro-frame"></iframe><iframe id="micro-frame"></iframe></div>
+    </div>
+  </div>
+
+  <script>
+    // PARTICLE ENGINE FOR BOOT SCREEN
+    const canvas = document.getElementById('particles');
+    const ctx = canvas.getContext('2d');
+    let width, height;
+    let particleArray = [];
+
+    function initParticles() {
+      width = canvas.width = window.innerWidth;
+      height = canvas.height = window.innerHeight;
+      particleArray = [];
+      for (let i = 0; i < 60; i++) {
+        particleArray.push({
+          x: Math.random() * width, y: Math.random() * height,
+          size: Math.random() * 2 + 0.5,
+          speedX: Math.random() * 0.5 - 0.25, speedY: Math.random() * 0.5 - 0.25,
+          opacity: Math.random() * 0.5 + 0.1
+        });
+      }
+    }
+    function animateParticles() {
+      ctx.clearRect(0, 0, width, height);
+      for (let i = 0; i < particleArray.length; i++) {
+        let p = particleArray[i];
+        p.x += p.speedX; p.y += p.speedY;
+        if (p.x < 0 || p.x > width) p.speedX *= -1;
+        if (p.y < 0 || p.y > height) p.speedY *= -1;
+        ctx.fillStyle = `rgba(0, 240, 255, ${p.opacity})`;
+        ctx.beginPath(); ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2); ctx.fill();
+      }
+      requestAnimationFrame(animateParticles);
+    }
+    initParticles(); animateParticles();
+
+    // TAB SWITCHING LOGIC FOR SETTINGS MODAL
+    function switchTab(tabId) {
+      document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active-tab'));
+      document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
+      
+      document.getElementById('tab-' + tabId).classList.add('active-tab');
+      document.getElementById('btn-' + tabId).classList.add('active');
+
+      const titleMap = { 'help': 'PROTOCOL & HELP', 'feedback': 'TRANSMIT FEEDBACK', 'about': 'SYSTEM INFO' };
+      document.getElementById('modal-title').innerText = titleMap[tabId];
+    }
+
+    // CORE LOGIC
+    const input = document.getElementById('command-input');
+    const spinner = document.getElementById('loading-spinner');
+    const hudGrid = document.getElementById('main-grid');
+    const bootScreen = document.getElementById('boot-screen');
+    const infoModal = document.getElementById('info-modal');
+    
+    input.addEventListener('keypress', (e) => {
+      if (e.key === 'Enter' && input.value.trim()) {
+        spinner.style.display = 'block';
+        hudGrid.style.display = 'none'; 
+        window.pywebview.api.submit_query(input.value.trim());
+      }
+    });
+
+    function toggleInfoModal() { 
+      infoModal.style.display = (infoModal.style.display === 'flex') ? 'none' : 'flex'; 
+    }
+
+    let dragEnabled = true;
+    const titleTag = document.querySelector('.title-tag');
+    const headerBar = document.querySelector('.header-bar');
+    titleTag.addEventListener('dblclick', (e) => {
+      e.stopPropagation();
+      dragEnabled = !dragEnabled;
+      headerBar.style.webkitAppRegion = dragEnabled ? 'drag' : 'no-drag';
+      titleTag.style.opacity = dragEnabled ? '1.0' : '0.5';
+    });
+
+    window.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        if (infoModal.style.display === 'flex') {
+          infoModal.style.display = 'none';
+        } else if (document.getElementById('image-modal').style.display === 'flex') {
+          document.getElementById('image-modal').style.display = 'none';
+        } else {
+          window.pywebview.api.hide_window();
+        }
+      }
+    });
+
+    window.resetUI = function() {
+      if (bootScreen.style.display !== 'none') {
+        bootScreen.style.display = 'none';
+      }
+      input.value = '';
+      hudGrid.style.display = 'none';
+      spinner.style.display = 'none';
+      infoModal.style.display = 'none';
+      document.getElementById('image-modal').style.display = 'none';
+      
+      // Reset Modal state to default Help tab
+      switchTab('help');
+      document.getElementById('feedback-input').value = '';
+      document.getElementById('feedback-status').innerText = '';
+      
+      input.focus();
+    };
+
+    function transmitFeedback() {
+      const fbInput = document.getElementById('feedback-input');
+      const fbStatus = document.getElementById('feedback-status');
+      const fbBtn = document.getElementById('feedback-submit');
+      const text = fbInput.value.trim();
+
+      if (!text) { fbStatus.innerText = "ERROR: Message is empty."; fbStatus.style.color = "#ff7070"; return; }
+      fbStatus.innerText = "Transmitting..."; fbStatus.style.color = "var(--cyan)";
+      fbBtn.disabled = true; fbBtn.style.opacity = "0.5";
+
+      window.pywebview.api.send_feedback(text).then(response => {
+        fbBtn.disabled = false; fbBtn.style.opacity = "1";
+        if (response === "SUCCESS") { fbStatus.innerText = "Feedback Sent."; fbStatus.style.color = "#00ff00"; fbInput.value = ""; } 
+        else if (response === "NO_INTERNET") { fbStatus.innerText = "Offline."; fbStatus.style.color = "#ff7070"; } 
+        else { fbStatus.innerText = "Failed."; fbStatus.style.color = "#ff7070"; }
+        setTimeout(() => { fbStatus.innerText = ""; }, 4000);
+      });
+    }
+
+    window.renderIrisData = function(data) {
+      spinner.style.display = 'none';
+      hudGrid.style.display = 'grid';
+      document.getElementById('category-badge').innerText = data.category.toUpperCase();
+      document.getElementById('subject-title').innerText = data.entity;
+      document.getElementById('info-content').innerText = data.full_text;
+
+      const gallery = document.getElementById('image-gallery');
+      gallery.innerHTML = '';
+      if (data.images && data.images.length > 0) {
+        data.images.forEach(url => {
+          const img = document.createElement('img'); img.src = url;
+          img.onerror = () => img.style.display = 'none';
+          img.onclick = (e) => { e.stopPropagation(); document.getElementById('modal-img').src = img.src; document.getElementById('image-modal').style.display = 'flex'; };
+          gallery.appendChild(img);
+        });
+      }
+
+      const mapContainer = document.getElementById('map-container');
+      if (data.show_maps) {
+        mapContainer.style.display = 'flex';
+        document.getElementById('macro-frame').src = data.map_macro;
+        document.getElementById('micro-frame').src = data.map_micro;
+      } else {
+        mapContainer.style.display = 'none';
+      }
+    };
+  </script>
+</body>
+</html>
